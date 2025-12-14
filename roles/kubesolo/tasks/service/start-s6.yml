@@ -1,0 +1,8 @@
+---
+# Start kubesolo service (s6)
+
+- name: Start kubesolo service
+  ansible.builtin.command: s6-svc -u /etc/s6/sv/kubesolo
+  changed_when: true
+  become: true
+  failed_when: false

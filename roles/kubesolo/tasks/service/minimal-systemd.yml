@@ -1,0 +1,22 @@
+---
+# Minimal systemd service setup
+
+- name: Create systemd service file
+  ansible.builtin.template:
+    src: kubesolo.service.j2
+    dest: /etc/systemd/system/kubesolo.service
+    mode: '0644'
+  become: true
+
+- name: Reload systemd daemon
+  ansible.builtin.systemd:
+    daemon_reload: true
+  become: true
+
+- name: Start KubeSolo service
+  ansible.builtin.systemd:
+    name: kubesolo
+    state: started
+  become: true
+  register: service_start
+  failed_when: false

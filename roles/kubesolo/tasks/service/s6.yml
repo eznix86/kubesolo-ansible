@@ -1,0 +1,40 @@
+---
+# S6 service setup - matches install.sh create_s6_service()
+
+- name: Create s6 service directory
+  ansible.builtin.file:
+    path: /etc/s6/sv/kubesolo
+    state: directory
+    mode: '0755'
+  become: true
+
+- name: Create s6 run script
+  ansible.builtin.template:
+    src: kubesolo.s6.run.j2
+    dest: /etc/s6/sv/kubesolo/run
+    mode: '0755'
+  become: true
+
+- name: Create s6 finish script
+  ansible.builtin.copy:
+    dest: /etc/s6/sv/kubesolo/finish
+    mode: '0755'
+    content: |
+      #!/bin/sh
+      echo "kubesolo service finished"
+  become: true
+
+- name: Enable kubesolo service
+  ansible.builtin.file:
+    src: /etc/s6/sv/kubesolo
+    dest: /etc/s6/adminsv/default/kubesolo
+    state: link
+    force: true
+  become: true
+  failed_when: false
+
+- name: Start kubesolo service
+  ansible.builtin.command: s6-svc -u /etc/s6/sv/kubesolo
+  changed_when: true
+  failed_when: false
+  become: true

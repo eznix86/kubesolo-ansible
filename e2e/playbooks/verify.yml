@@ -1,0 +1,132 @@
+---
+# e2e Verify Playbook
+# Verifies KubeSolo is installed and running correctly
+
+- name: Verify KubeSolo Installation
+  hosts: kubesolo_nodes
+  become: true
+  vars:
+    kubesolo_path: "/var/lib/kubesolo"
+    kubesolo_kubeconfig_path: "{{ kubesolo_path }}/pki/admin/admin.kubeconfig"
+  tasks:
+    - name: Check kubesolo binary exists
+      ansible.builtin.stat:
+        path: /usr/local/bin/kubesolo
+      register: kubesolo_binary
+
+    - name: Assert kubesolo binary exists
+      ansible.builtin.assert:
+        that:
+          - kubesolo_binary.stat.exists
+          - kubesolo_binary.stat.executable
+        fail_msg: "KubeSolo binary not found or not executable"
+        success_msg: "KubeSolo binary found at /usr/local/bin/kubesolo"
+
+    - name: Check version marker file exists
+      ansible.builtin.stat:
+        path: /var/lib/kubesolo/.version
+      register: version_marker
+
+    - name: Read version from marker file
+      ansible.builtin.slurp:
+        src: /var/lib/kubesolo/.version
+      register: kubesolo_version_file
+      when: version_marker.stat.exists
+
+    - name: Display KubeSolo version
+      ansible.builtin.debug:
+        msg: "KubeSolo version: {{ (kubesolo_version_file.content | b64decode | trim) if version_marker.stat.exists else 'Version marker not found' }}"
+
+    - name: Check data directory exists
+      ansible.builtin.stat:
+        path: /var/lib/kubesolo
+      register: data_dir
+
+    - name: Assert data directory exists
+      ansible.builtin.assert:
+        that:
+          - data_dir.stat.exists
+          - data_dir.stat.isdir
+        fail_msg: "KubeSolo data directory not found"
+        success_msg: "KubeSolo data directory found at /var/lib/kubesolo"
+
+    - name: Detect init system
+      ansible.builtin.set_fact:
+        init_system: "{{ ansible_facts['service_mgr'] }}"
+
+    - name: Check service status (systemd)
+      ansible.builtin.systemd:
+        name: kubesolo
+      register: kubesolo_systemd
+      when: init_system == 'systemd'
+      failed_when: false
+
+    - name: Assert systemd service is running
+      ansible.builtin.assert:
+        that:
+          - kubesolo_systemd.status.ActiveState == 'active'
+        fail_msg: "KubeSolo systemd service is not running"
+        success_msg: "KubeSolo systemd service is active"
+      when: init_system == 'systemd'
+
+    - name: Check service status (openrc)
+      ansible.builtin.command: rc-service kubesolo status
+      register: kubesolo_openrc
+      when: init_system == 'openrc'
+      changed_when: false
+      failed_when: false
+
+    - name: Assert openrc service is running
+      ansible.builtin.assert:
+        that:
+          - kubesolo_openrc.rc == 0
+        fail_msg: "KubeSolo openrc service is not running"
+        success_msg: "KubeSolo openrc service is active"
+      when: init_system == 'openrc'
+
+    - name: Wait for kubeconfig to be generated
+      ansible.builtin.wait_for:
+        path: "{{ kubesolo_kubeconfig_path }}"
+        timeout: 60
+
+    - name: Check kubeconfig exists
+      ansible.builtin.stat:
+        path: "{{ kubesolo_kubeconfig_path }}"
+      register: kubeconfig
+
+    - name: Assert kubeconfig exists
+      ansible.builtin.assert:
+        that:
+          - kubeconfig.stat.exists
+        fail_msg: "KubeSolo kubeconfig not found"
+        success_msg: "KubeSolo kubeconfig found"
+
+    - name: Check if kubectl is available
+      ansible.builtin.command: which kubectl
+      register: kubectl_check
+      changed_when: false
+      failed_when: false
+
+    - name: Test kubectl connectivity
+      ansible.builtin.command: kubectl --kubeconfig={{ kubesolo_kubeconfig_path }} get nodes
+      register: kubectl_nodes
+      when: kubectl_check.rc == 0
+      changed_when: false
+      retries: 5
+      delay: 10
+      until: kubectl_nodes.rc == 0
+
+    - name: Display kubectl nodes output
+      ansible.builtin.debug:
+        msg: "{{ kubectl_nodes.stdout_lines }}"
+      when: kubectl_check.rc == 0 and kubectl_nodes.rc == 0
+
+    - name: Verify installation summary
+      ansible.builtin.debug:
+        msg:
+          - "KubeSolo verification complete"
+          - "Binary: /usr/local/bin/kubesolo"
+          - "Data directory: {{ kubesolo_path }}"
+          - "Kubeconfig: {{ kubesolo_kubeconfig_path }}"
+          - "Init system: {{ init_system }}"
+          - "Service status: running"

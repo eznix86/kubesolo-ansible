@@ -1,0 +1,45 @@
+---
+# KubeSolo Ansible Role - Main Entry Point
+# Routes to appropriate tasks based on kubesolo_state
+
+- name: Display role configuration
+  ansible.builtin.debug:
+    msg:
+      - "KubeSolo Role Configuration:"
+      - "  State: {{ kubesolo_state }}"
+      - "  Mode: {{ kubesolo_mode }}"
+      - "  Version: {{ kubesolo_version }}"
+      - "  Path: {{ kubesolo_path }}"
+
+# Always run detection to set facts about the target system
+- name: Detect system architecture, libc, and init system
+  ansible.builtin.include_tasks: detect.yml
+
+# Run preflight checks for install and upgrade operations
+- name: Run preflight checks
+  ansible.builtin.include_tasks: preflight.yml
+  when: kubesolo_state in ['present', 'upgraded']
+
+# Install KubeSolo (standard mode)
+- name: Install KubeSolo (standard mode)
+  ansible.builtin.include_tasks: install.yml
+  when:
+    - kubesolo_state == 'present'
+    - kubesolo_mode == 'standard'
+
+# Install KubeSolo (minimal mode)
+- name: Install KubeSolo (minimal mode)
+  ansible.builtin.include_tasks: install_minimal.yml
+  when:
+    - kubesolo_state == 'present'
+    - kubesolo_mode == 'minimal'
+
+# Upgrade KubeSolo
+- name: Upgrade KubeSolo
+  ansible.builtin.include_tasks: upgrade.yml
+  when: kubesolo_state == 'upgraded'
+
+# Uninstall KubeSolo
+- name: Uninstall KubeSolo
+  ansible.builtin.include_tasks: uninstall.yml
+  when: kubesolo_state == 'absent'

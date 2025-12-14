@@ -1,0 +1,14 @@
+---
+# Runit service update during upgrade
+
+- name: Update runit run script
+  ansible.builtin.template:
+    src: kubesolo.runit.run.j2
+    dest: /etc/runit/sv/kubesolo/run
+    mode: '0755'
+  become: true
+
+- name: Start kubesolo service
+  ansible.builtin.command: sv start kubesolo
+  changed_when: true
+  become: true

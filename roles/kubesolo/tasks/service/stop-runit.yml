@@ -1,0 +1,9 @@
+---
+# Stop KubeSolo service (runit)
+
+- name: Stop kubesolo service
+  ansible.builtin.command:
+    cmd: sv stop kubesolo
+  failed_when: false
+  changed_when: false
+  become: true

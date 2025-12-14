@@ -1,0 +1,42 @@
+# Ansible
+.ansible
+*.retry
+
+# Claude
+.claude
+
+# Vagrant
+.vagrant/
+*.box
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+.eggs/
+*.egg-info/
+.uv/
+
+# Molecule
+.molecule/
+.cache/
+
+# E2E dynamic inventory (generated at runtime)
+e2e/inventory/*.yml
+!e2e/inventory/.gitkeep
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log

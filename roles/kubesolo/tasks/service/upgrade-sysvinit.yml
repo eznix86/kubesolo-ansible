@@ -1,0 +1,15 @@
+---
+# SysVinit service update during upgrade
+
+- name: Update sysvinit service file
+  ansible.builtin.template:
+    src: kubesolo.sysvinit.j2
+    dest: /etc/init.d/kubesolo
+    mode: '0755'
+  become: true
+
+- name: Start kubesolo service
+  ansible.builtin.service:
+    name: kubesolo
+    state: started
+  become: true

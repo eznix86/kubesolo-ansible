@@ -1,0 +1,21 @@
+---
+namespace: eznix86
+name: kubesolo
+version: 0.1.0
+readme: README.md
+authors:
+  - Bruno Bernard <contact.brunobernard@gmail.com>
+description: Ansible collection for KubeSolo deployment and management
+license:
+  - MIT
+repository: https://github.com/eznix86/kubesolo-ansible
+documentation: https://github.com/eznix86/kubesolo-ansible
+homepage: https://github.com/eznix86/kubesolo-ansible
+issues: https://github.com/eznix86/kubesolo-ansible/issues
+tags:
+  - kubernetes
+  - k8s
+  - kubesolo
+  - deployment
+dependencies: {}
+build_ignore: []

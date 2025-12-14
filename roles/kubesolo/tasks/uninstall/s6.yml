@@ -1,0 +1,21 @@
+---
+# S6 uninstall - matches uninstall.sh stop_s6_service()
+
+- name: Stop KubeSolo service
+  ansible.builtin.command: s6-svc -d /etc/s6/sv/kubesolo
+  become: true
+  failed_when: false
+  changed_when: false
+
+- name: Remove s6 service symlink
+  ansible.builtin.file:
+    path: /etc/s6/adminsv/default/kubesolo
+    state: absent
+  become: true
+  failed_when: false
+
+- name: Remove s6 service directory
+  ansible.builtin.file:
+    path: /etc/s6/sv/kubesolo
+    state: absent
+  become: true

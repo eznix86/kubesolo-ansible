@@ -1,0 +1,12 @@
+---
+- name: Stop KubeSolo service
+  ansible.builtin.command: stop kubesolo
+  become: true
+  failed_when: false
+  changed_when: false
+
+- name: Remove upstart service file
+  ansible.builtin.file:
+    path: /etc/init/kubesolo.conf
+    state: absent
+  become: true

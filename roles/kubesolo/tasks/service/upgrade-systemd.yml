@@ -1,0 +1,22 @@
+---
+# Systemd service update during upgrade
+
+- name: Update systemd service file
+  ansible.builtin.template:
+    src: kubesolo.service.j2
+    dest: /etc/systemd/system/kubesolo.service
+    mode: '0644'
+  become: true
+  register: systemd_service_file_upgrade
+
+- name: Reload systemd daemon
+  ansible.builtin.systemd:
+    daemon_reload: true
+  become: true
+  when: systemd_service_file_upgrade.changed
+
+- name: Start kubesolo service
+  ansible.builtin.service:
+    name: kubesolo
+    state: started
+  become: true

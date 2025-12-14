@@ -1,0 +1,23 @@
+---
+# Upstart init system service configuration
+
+- name: Create upstart service configuration
+  ansible.builtin.template:
+    src: kubesolo.upstart.j2
+    dest: /etc/init/kubesolo.conf
+    mode: '0644'
+    owner: root
+    group: root
+  become: true
+
+- name: Enable kubesolo service
+  ansible.builtin.service:
+    name: kubesolo
+    enabled: true
+  become: true
+
+- name: Start kubesolo service
+  ansible.builtin.service:
+    name: kubesolo
+    state: started
+  become: true

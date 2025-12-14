@@ -1,0 +1,20 @@
+---
+# OpenRC-specific uninstall tasks for KubeSolo
+
+- name: Stop KubeSolo service
+  ansible.builtin.command: rc-service kubesolo stop
+  become: true
+  failed_when: false
+  changed_when: false
+
+- name: Disable KubeSolo service
+  ansible.builtin.command: rc-update del kubesolo
+  become: true
+  failed_when: false
+  changed_when: false
+
+- name: Remove openrc service file
+  ansible.builtin.file:
+    path: /etc/init.d/kubesolo
+    state: absent
+  become: true

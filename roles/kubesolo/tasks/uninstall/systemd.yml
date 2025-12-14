@@ -1,0 +1,26 @@
+---
+- name: Stop KubeSolo service
+  ansible.builtin.systemd:
+    name: kubesolo
+    state: stopped
+  become: true
+  failed_when: false
+
+- name: Disable KubeSolo service
+  ansible.builtin.systemd:
+    name: kubesolo
+    enabled: false
+  become: true
+  failed_when: false
+
+- name: Remove systemd service file
+  ansible.builtin.file:
+    path: /etc/systemd/system/kubesolo.service
+    state: absent
+  become: true
+
+- name: Reload systemd daemon
+  ansible.builtin.systemd:
+    daemon_reload: true
+  become: true
+  failed_when: false

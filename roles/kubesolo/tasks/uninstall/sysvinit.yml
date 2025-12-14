@@ -1,0 +1,28 @@
+---
+# Uninstall tasks for SysVinit
+- name: Stop KubeSolo service
+  ansible.builtin.service:
+    name: kubesolo
+    state: stopped
+  become: true
+  failed_when: false
+
+- name: Disable service (Debian)
+  ansible.builtin.command: update-rc.d kubesolo remove
+  become: true
+  when: ansible_facts['os_family'] == 'Debian'
+  failed_when: false
+  changed_when: false
+
+- name: Disable service (RedHat)
+  ansible.builtin.command: chkconfig kubesolo off
+  become: true
+  when: ansible_facts['os_family'] == 'RedHat'
+  failed_when: false
+  changed_when: false
+
+- name: Remove sysvinit service file
+  ansible.builtin.file:
+    path: /etc/init.d/kubesolo
+    state: absent
+  become: true

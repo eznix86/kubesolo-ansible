@@ -1,0 +1,28 @@
+---
+# Runit uninstall - matches uninstall.sh stop_runit_service()
+
+- name: Stop KubeSolo service
+  ansible.builtin.command: sv stop kubesolo
+  failed_when: false
+  changed_when: false
+  become: true
+
+- name: Remove runit service symlink (primary location)
+  ansible.builtin.file:
+    path: /var/service/kubesolo
+    state: absent
+  failed_when: false
+  become: true
+
+- name: Remove runit service symlink (alternative location)
+  ansible.builtin.file:
+    path: /etc/runit/runsvdir/default/kubesolo
+    state: absent
+  failed_when: false
+  become: true
+
+- name: Remove runit service directory
+  ansible.builtin.file:
+    path: /etc/runit/sv/kubesolo
+    state: absent
+  become: true

@@ -1,0 +1,16 @@
+---
+# Minimal openrc service setup - for Alpine and similar systems
+
+- name: Create openrc init script for KubeSolo
+  ansible.builtin.template:
+    src: kubesolo.openrc.j2
+    dest: /etc/init.d/kubesolo
+    mode: '0755'
+  become: true
+
+- name: Start KubeSolo service
+  ansible.builtin.command: rc-service kubesolo start
+  become: true
+  changed_when: true
+  register: service_start
+  failed_when: false

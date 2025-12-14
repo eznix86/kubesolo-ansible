@@ -1,0 +1,121 @@
+---
+# KubeSolo Ansible Role - Preflight Checks
+# Performs validation before install/upgrade operations
+
+# Check for Docker using stat instead of which
+- name: Check if docker binary exists
+  ansible.builtin.stat:
+    path: /usr/bin/docker
+  register: docker_bin_check
+
+- name: Check if docker binary exists in /usr/local/bin
+  ansible.builtin.stat:
+    path: /usr/local/bin/docker
+  register: docker_local_bin_check
+
+- name: Fail if Docker is installed
+  ansible.builtin.fail:
+    msg: |
+      Docker is installed on this system. KubeSolo requires a clean system without Docker.
+      Please uninstall Docker before proceeding with KubeSolo installation.
+  when: docker_bin_check.stat.exists or docker_local_bin_check.stat.exists
+
+- name: Check if Docker socket exists
+  ansible.builtin.stat:
+    path: /var/run/docker.sock
+  register: docker_socket_check
+
+- name: Fail if Docker daemon is running
+  ansible.builtin.fail:
+    msg: |
+      Docker daemon appears to be running (socket found at /var/run/docker.sock).
+      KubeSolo requires a clean system without Docker.
+      Please stop and uninstall Docker before proceeding with KubeSolo installation.
+  when: docker_socket_check.stat.exists
+
+# Use ansible_facts for hostname instead of command
+- name: Check hostname for uppercase letters
+  ansible.builtin.fail:
+    msg: |
+      Hostname contains uppercase letters: {{ ansible_facts['hostname'] }}
+      KubeSolo requires an RFC 1123 compliant hostname (lowercase only).
+      Please change your hostname to lowercase before proceeding.
+      Example: sudo hostnamectl set-hostname {{ ansible_facts['hostname'] | lower }}
+  when: ansible_facts['hostname'] is regex('[A-Z]')
+
+- name: Validate hostname RFC 1123 compliance
+  ansible.builtin.fail:
+    msg: |
+      Hostname is not RFC 1123 compliant: {{ ansible_facts['hostname'] }}
+      Hostname must:
+      - Start and end with a lowercase letter or number
+      - Contain only lowercase letters, numbers, hyphens, and dots
+      - Not have consecutive dots or hyphens at the start/end
+      Please change your hostname before proceeding.
+  when: not (ansible_facts['hostname'] is regex('^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$'))
+
+# Check for iptables using stat
+- name: Check if iptables binary exists
+  ansible.builtin.stat:
+    path: /usr/sbin/iptables
+  register: iptables_sbin_check
+
+- name: Check if iptables binary exists in /sbin
+  ansible.builtin.stat:
+    path: /sbin/iptables
+  register: iptables_bin_check
+
+- name: Fail if iptables is not installed
+  ansible.builtin.fail:
+    msg: |
+      iptables command not found. KubeSolo requires iptables to be installed.
+      Please install iptables before proceeding.
+      Example: sudo apt-get install iptables (Debian/Ubuntu)
+               sudo yum install iptables (RHEL/CentOS)
+  when: not (iptables_sbin_check.stat.exists or iptables_bin_check.stat.exists)
+
+# Check xt_comment module using slurp instead of grep
+- name: Read /proc/modules
+  ansible.builtin.slurp:
+    src: /proc/modules
+  register: proc_modules
+  failed_when: false
+
+- name: Check if xt_comment module is loaded
+  ansible.builtin.set_fact:
+    xt_comment_loaded: "{{ 'xt_comment' in (proc_modules.content | default('') | b64decode) }}"
+
+# Use community.general.modprobe instead of command
+- name: Attempt to load xt_comment module
+  community.general.modprobe:
+    name: xt_comment
+    state: present
+  register: modprobe_result
+  failed_when: false
+  become: true
+  when: not xt_comment_loaded
+
+# xt_comment may be built into the kernel (not as a module)
+# Test by actually using iptables with comment extension
+- name: Test iptables comment functionality
+  ansible.builtin.command:
+    cmd: iptables -t filter -L -n
+  register: iptables_test
+  changed_when: false
+  failed_when: false
+  become: true
+  when:
+    - not xt_comment_loaded
+    - modprobe_result is failed or (modprobe_result.rc is defined and modprobe_result.rc != 0)
+
+- name: Fail if xt_comment module is not available
+  ansible.builtin.fail:
+    msg: |
+      iptables xt_comment module is not available on this system.
+      KubeSolo requires the xt_comment kernel module for iptables functionality.
+      This module is typically included in the kernel but may need to be enabled.
+      Please ensure your kernel has CONFIG_NETFILTER_XT_MATCH_COMMENT enabled.
+  when:
+    - not xt_comment_loaded
+    - modprobe_result is failed or (modprobe_result.rc is defined and modprobe_result.rc != 0)
+    - iptables_test is failed or (iptables_test.rc is defined and iptables_test.rc != 0)

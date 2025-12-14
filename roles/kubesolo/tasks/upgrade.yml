@@ -1,0 +1,177 @@
+---
+# KubeSolo Ansible Role - Upgrade Tasks
+# Performs in-place binary upgrade without full reinstall
+
+- name: Check if kubesolo binary exists
+  ansible.builtin.stat:
+    path: "{{ kubesolo_install_path }}"
+  register: kubesolo_binary_stat
+
+- name: Fail if kubesolo is not installed
+  ansible.builtin.fail:
+    msg: |
+      KubeSolo binary not found at {{ kubesolo_install_path }}.
+      Cannot upgrade a system that does not have KubeSolo installed.
+      Please install KubeSolo first by setting kubesolo_state: present
+  when: not kubesolo_binary_stat.stat.exists
+
+- name: Check if version marker file exists
+  ansible.builtin.stat:
+    path: "{{ kubesolo_path }}/.version"
+  register: kubesolo_version_marker
+
+- name: Read installed version from marker file
+  ansible.builtin.slurp:
+    src: "{{ kubesolo_path }}/.version"
+  register: kubesolo_version_file
+  when: kubesolo_version_marker.stat.exists
+  become: true
+
+- name: Parse current version
+  ansible.builtin.set_fact:
+    kubesolo_current_version: "{{ (kubesolo_version_file.content | b64decode | trim) if kubesolo_version_marker.stat.exists else 'unknown' }}"
+
+- name: Display version information
+  ansible.builtin.debug:
+    msg:
+      - "Current version: {{ kubesolo_current_version }}"
+      - "Target version: {{ kubesolo_version }}"
+
+- name: Skip upgrade if versions match
+  ansible.builtin.debug:
+    msg: "KubeSolo is already at version {{ kubesolo_version }}. Skipping upgrade."
+  when: kubesolo_current_version == kubesolo_version
+
+- name: Perform upgrade
+  when: kubesolo_current_version != kubesolo_version
+  block:
+    # Step 1: Download binary to temporary location (while service still running)
+    - name: Construct download URL
+      ansible.builtin.set_fact:
+        kubesolo_download_url: >-
+          {{ kubesolo_github_release_url }}/{{ kubesolo_version }}/kubesolo-{{
+          kubesolo_version }}-linux-{{ kubesolo_arch }}{{ kubesolo_libc_suffix }}.tar.gz
+
+    - name: Create temporary download directory
+      ansible.builtin.tempfile:
+        state: directory
+        suffix: kubesolo-upgrade
+      register: kubesolo_temp_dir
+
+    - name: Download new kubesolo binary
+      ansible.builtin.get_url:
+        url: "{{ kubesolo_download_url }}"
+        dest: "{{ kubesolo_temp_dir.path }}/kubesolo.tar.gz"
+        mode: '0644'
+        timeout: 300
+      register: download_result
+      retries: 3
+      delay: 5
+      until: download_result is succeeded
+
+    - name: Extract new kubesolo binary
+      ansible.builtin.unarchive:
+        src: "{{ kubesolo_temp_dir.path }}/kubesolo.tar.gz"
+        dest: "{{ kubesolo_temp_dir.path }}"
+        remote_src: true
+      register: extract_result
+
+    # Step 2: Stop service (minimize downtime - download already complete)
+    - name: Stop kubesolo service
+      ansible.builtin.include_tasks: "service/stop-{{ kubesolo_init_system }}.yml"
+
+    - name: Wait for kubesolo to stop gracefully
+      ansible.builtin.wait_for:
+        port: 6443
+        state: stopped
+        timeout: 30
+      failed_when: false
+
+    # Step 3: Replace binary
+    - name: Backup current kubesolo binary
+      ansible.builtin.copy:
+        src: "{{ kubesolo_install_path }}"
+        dest: "{{ kubesolo_install_path }}.backup"
+        remote_src: true
+        mode: '0755'
+      register: backup_result
+      failed_when: false
+
+    - name: Replace kubesolo binary
+      ansible.builtin.copy:
+        src: "{{ kubesolo_temp_dir.path }}/kubesolo"
+        dest: "{{ kubesolo_install_path }}"
+        remote_src: true
+        mode: '0755'
+        owner: root
+        group: root
+      register: binary_replace_result
+
+    # Step 4 & 5: Update service files (optional) and start service
+    - name: Update service and start kubesolo
+      ansible.builtin.include_tasks: "service/upgrade-{{ kubesolo_init_system }}.yml"
+
+    - name: Wait for API server to be ready
+      ansible.builtin.wait_for:
+        port: 6443
+        host: localhost
+        state: started
+        timeout: 60
+        delay: 5
+      register: api_server_health
+
+    - name: Write version marker file
+      ansible.builtin.copy:
+        content: "{{ kubesolo_version }}"
+        dest: "{{ kubesolo_path }}/.version"
+        mode: '0644'
+      become: true
+
+    - name: Display upgrade result
+      ansible.builtin.debug:
+        msg:
+          - "Upgrade completed successfully"
+          - "Previous version: {{ kubesolo_current_version }}"
+          - "New version: {{ kubesolo_version }}"
+
+    - name: Clean up temporary directory
+      ansible.builtin.file:
+        path: "{{ kubesolo_temp_dir.path }}"
+        state: absent
+      when: kubesolo_temp_dir.path is defined
+
+  rescue:
+    - name: Display upgrade failure message
+      ansible.builtin.debug:
+        msg: "Upgrade failed. Attempting to restore from backup..."
+
+    - name: Restore backup binary if it exists
+      ansible.builtin.copy:
+        src: "{{ kubesolo_install_path }}.backup"
+        dest: "{{ kubesolo_install_path }}"
+        remote_src: true
+        mode: '0755'
+        owner: root
+        group: root
+      when: backup_result is defined and backup_result.changed
+      register: restore_result
+      failed_when: false
+
+    - name: Restart service after restore
+      ansible.builtin.include_tasks: "service/start-{{ kubesolo_init_system }}.yml"
+      when:
+        - restore_result is defined
+        - restore_result.changed
+
+    - name: Clean up temporary directory on failure
+      ansible.builtin.file:
+        path: "{{ kubesolo_temp_dir.path }}"
+        state: absent
+      when: kubesolo_temp_dir.path is defined
+      failed_when: false
+
+    - name: Fail with original error
+      ansible.builtin.fail:
+        msg: |
+          KubeSolo upgrade failed. The system has been restored to the previous version if possible.
+          Original error: {{ ansible_failed_result.msg | default('Unknown error') }}

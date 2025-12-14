@@ -1,0 +1,24 @@
+---
+profile: production
+
+exclude_paths:
+  - .venv/
+  - .git/
+  - molecule/
+
+skip_list:
+  - yaml[line-length]
+  - var-naming[no-role-prefix]
+  - risky-shell-pipe
+  - command-instead-of-module
+  - galaxy[no-changelog]
+  - galaxy[tags]
+  - schema[meta-runtime]
+  - schema[meta]
+  - meta-no-tags
+  - fqcn[canonical]
+
+warn_list:
+  - experimental
+
+use_default_rules: true

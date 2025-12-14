@@ -1,0 +1,40 @@
+---
+# Runit service setup - matches install.sh create_runit_service()
+
+- name: Create runit service directory
+  ansible.builtin.file:
+    path: /etc/runit/sv/kubesolo
+    state: directory
+    mode: '0755'
+  become: true
+
+- name: Create runit run script
+  ansible.builtin.template:
+    src: kubesolo.runit.run.j2
+    dest: /etc/runit/sv/kubesolo/run
+    mode: '0755'
+  become: true
+
+- name: Enable kubesolo service (primary location)
+  ansible.builtin.file:
+    src: /etc/runit/sv/kubesolo
+    dest: /var/service/kubesolo
+    state: link
+  become: true
+  register: runit_primary_enable
+  failed_when: false
+
+- name: Enable kubesolo service (alternative location)
+  ansible.builtin.file:
+    src: /etc/runit/sv/kubesolo
+    dest: /etc/runit/runsvdir/default/kubesolo
+    state: link
+  become: true
+  when: runit_primary_enable.failed | default(false)
+
+# Runit auto-starts when symlink is created, but explicitly start to be sure
+- name: Start kubesolo service
+  ansible.builtin.command: sv start kubesolo
+  changed_when: true
+  failed_when: false
+  become: true

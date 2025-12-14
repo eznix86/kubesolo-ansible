@@ -1,0 +1,10 @@
+---
+# Stop KubeSolo service (upstart)
+
+- name: Stop kubesolo service
+  ansible.builtin.service:
+    name: kubesolo
+    state: stopped
+  failed_when: false
+  changed_when: false
+  become: true

@@ -1,0 +1,11 @@
+---
+# e2e Install Playbook
+# Installs KubeSolo using the kubesolo role
+
+- name: Install KubeSolo
+  hosts: kubesolo_nodes
+  become: true
+  vars:
+    kubesolo_state: present
+  roles:
+    - kubesolo

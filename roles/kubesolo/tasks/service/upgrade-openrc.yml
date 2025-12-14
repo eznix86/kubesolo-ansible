@@ -1,0 +1,15 @@
+---
+# OpenRC service update during upgrade
+
+- name: Update openrc service file
+  ansible.builtin.template:
+    src: kubesolo.openrc.j2
+    dest: /etc/init.d/kubesolo
+    mode: '0755'
+  become: true
+
+- name: Start kubesolo service
+  ansible.builtin.service:
+    name: kubesolo
+    state: started
+  become: true

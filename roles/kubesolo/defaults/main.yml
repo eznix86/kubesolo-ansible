@@ -1,0 +1,44 @@
+---
+# KubeSolo Ansible Role - Default Variables
+# These variables can be overridden by users in their playbooks
+
+# State: present (install), absent (uninstall), upgraded
+kubesolo_state: present
+
+# Mode: standard (full install.sh logic) or minimal (for embedded/busybox)
+kubesolo_mode: standard
+
+# Version to install
+kubesolo_version: "v1.0.0"
+
+# Configuration path
+kubesolo_path: "/var/lib/kubesolo"
+
+# Run mode: service, daemon, or foreground
+kubesolo_run_mode: service
+
+# API Server extra SANs (list of IPs or DNS names)
+kubesolo_apiserver_extra_sans: []
+
+# Enable local storage provisioner
+kubesolo_local_storage: false
+
+# Enable debug logging
+kubesolo_debug: false
+
+# Enable pprof server for profiling
+kubesolo_pprof_server: false
+
+# Corporate proxy URL for HTTP/HTTPS requests
+kubesolo_proxy: ""
+
+# Portainer Edge integration
+kubesolo_portainer_edge_id: ""
+kubesolo_portainer_edge_key: ""
+kubesolo_portainer_edge_async: false
+
+# Uninstall options
+kubesolo_remove_data: false
+
+# Binary install path
+kubesolo_install_path: "/usr/local/bin/kubesolo"

@@ -1,0 +1,15 @@
+---
+# Upstart service update during upgrade
+
+- name: Update upstart service file
+  ansible.builtin.template:
+    src: kubesolo.upstart.j2
+    dest: /etc/init/kubesolo.conf
+    mode: '0644'
+  become: true
+
+- name: Start kubesolo service
+  ansible.builtin.service:
+    name: kubesolo
+    state: started
+  become: true

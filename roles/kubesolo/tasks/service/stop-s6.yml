@@ -1,0 +1,9 @@
+---
+# Stop KubeSolo service (s6)
+
+- name: Stop kubesolo service
+  ansible.builtin.command:
+    cmd: s6-svc -d /etc/s6/sv/kubesolo
+  failed_when: false
+  changed_when: false
+  become: true

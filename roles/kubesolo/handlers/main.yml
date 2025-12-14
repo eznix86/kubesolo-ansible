@@ -1,0 +1,132 @@
+---
+# KubeSolo Ansible Role - Handlers
+# Service management handlers supporting multiple init systems
+
+# Reload systemd (only for systemd-based systems)
+- name: Reload systemd
+  ansible.builtin.systemd:
+    daemon_reload: true
+  when:
+    - kubesolo_init_system is defined
+    - kubesolo_init_system == 'systemd'
+  become: true
+
+# Restart kubesolo service
+- name: Restart kubesolo
+  ansible.builtin.service:
+    name: kubesolo
+    state: restarted
+  when:
+    - kubesolo_init_system is defined
+    - kubesolo_init_system in ['systemd', 'sysvinit', 'openrc', 'upstart']
+
+- name: Restart kubesolo (runit)
+  ansible.builtin.command:
+    cmd: sv restart kubesolo
+  when:
+    - kubesolo_init_system is defined
+    - kubesolo_init_system == 'runit'
+  changed_when: true
+
+- name: Restart kubesolo (s6)
+  ansible.builtin.command:
+    cmd: s6-svc -t /etc/s6/sv/kubesolo
+  when:
+    - kubesolo_init_system is defined
+    - kubesolo_init_system == 's6'
+  changed_when: true
+
+# Start kubesolo service
+- name: Start kubesolo
+  ansible.builtin.service:
+    name: kubesolo
+    state: started
+  when:
+    - kubesolo_init_system is defined
+    - kubesolo_init_system in ['systemd', 'sysvinit', 'openrc', 'upstart']
+
+- name: Start kubesolo (runit)
+  ansible.builtin.command:
+    cmd: sv start kubesolo
+  when:
+    - kubesolo_init_system is defined
+    - kubesolo_init_system == 'runit'
+  changed_when: true
+
+- name: Start kubesolo (s6)
+  ansible.builtin.command:
+    cmd: s6-svc -u /etc/s6/sv/kubesolo
+  when:
+    - kubesolo_init_system is defined
+    - kubesolo_init_system == 's6'
+  changed_when: true
+
+# Stop kubesolo service
+- name: Stop kubesolo
+  ansible.builtin.service:
+    name: kubesolo
+    state: stopped
+  when:
+    - kubesolo_init_system is defined
+    - kubesolo_init_system in ['systemd', 'sysvinit', 'openrc', 'upstart']
+
+- name: Stop kubesolo (runit)
+  ansible.builtin.command:
+    cmd: sv stop kubesolo
+  when:
+    - kubesolo_init_system is defined
+    - kubesolo_init_system == 'runit'
+  changed_when: true
+
+- name: Stop kubesolo (s6)
+  ansible.builtin.command:
+    cmd: s6-svc -d /etc/s6/sv/kubesolo
+  when:
+    - kubesolo_init_system is defined
+    - kubesolo_init_system == 's6'
+  changed_when: true
+
+# Enable kubesolo service at boot
+- name: Enable kubesolo
+  ansible.builtin.service:
+    name: kubesolo
+    enabled: true
+  when:
+    - kubesolo_init_system is defined
+    - kubesolo_init_system in ['systemd', 'openrc', 'upstart']
+
+- name: Enable kubesolo (sysvinit - Debian)
+  ansible.builtin.command:
+    cmd: update-rc.d kubesolo defaults
+  when:
+    - kubesolo_init_system is defined
+    - kubesolo_init_system == 'sysvinit'
+    - ansible_os_family == 'Debian'
+  changed_when: true
+
+- name: Enable kubesolo (sysvinit - RedHat)
+  ansible.builtin.command:
+    cmd: chkconfig kubesolo on
+  when:
+    - kubesolo_init_system is defined
+    - kubesolo_init_system == 'sysvinit'
+    - ansible_os_family == 'RedHat'
+  changed_when: true
+
+- name: Enable kubesolo (runit)
+  ansible.builtin.file:
+    src: /etc/sv/kubesolo
+    dest: /var/service/kubesolo
+    state: link
+  when:
+    - kubesolo_init_system is defined
+    - kubesolo_init_system == 'runit'
+
+- name: Enable kubesolo (s6)
+  ansible.builtin.file:
+    src: /etc/s6/sv/kubesolo
+    dest: /etc/s6/rc/kubesolo
+    state: link
+  when:
+    - kubesolo_init_system is defined
+    - kubesolo_init_system == 's6'

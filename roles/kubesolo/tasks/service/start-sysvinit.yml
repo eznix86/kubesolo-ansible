@@ -1,0 +1,9 @@
+---
+# Start kubesolo service (sysvinit)
+
+- name: Start kubesolo service
+  ansible.builtin.service:
+    name: kubesolo
+    state: started
+  become: true
+  failed_when: false

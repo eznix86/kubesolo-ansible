@@ -1,0 +1,12 @@
+---
+# e2e Uninstall Playbook
+# Uninstalls KubeSolo using the kubesolo role
+
+- name: Uninstall KubeSolo
+  hosts: kubesolo_nodes
+  become: true
+  vars:
+    kubesolo_state: absent
+    kubesolo_remove_data: true
+  roles:
+    - kubesolo

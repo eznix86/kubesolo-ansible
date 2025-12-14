@@ -1,0 +1,208 @@
+---
+# KubeSolo Ansible Role - Standard Installation Tasks
+# Implements the full installation flow for KubeSolo
+
+# Step 0: Check if already installed with correct version
+- name: Initialize installation facts
+  ansible.builtin.set_fact:
+    kubesolo_installed_version: ''
+    kubesolo_needs_install: true
+
+- name: Check if kubesolo binary exists
+  ansible.builtin.stat:
+    path: "{{ kubesolo_install_path }}"
+  register: kubesolo_binary_check
+
+- name: Check if version marker file exists
+  ansible.builtin.stat:
+    path: "{{ kubesolo_path }}/.version"
+  register: kubesolo_version_marker
+
+- name: Read installed version from marker file
+  ansible.builtin.slurp:
+    src: "{{ kubesolo_path }}/.version"
+  register: kubesolo_version_file
+  when: kubesolo_version_marker.stat.exists
+  become: true
+
+- name: Parse installed version
+  ansible.builtin.set_fact:
+    kubesolo_installed_version: "{{ (kubesolo_version_file.content | b64decode | trim) if kubesolo_version_marker.stat.exists else '' }}"
+
+- name: Determine if installation is needed
+  ansible.builtin.set_fact:
+    kubesolo_needs_install: "{{ (not kubesolo_binary_check.stat.exists) or (kubesolo_installed_version != kubesolo_version) }}"
+
+- name: Display version information
+  ansible.builtin.debug:
+    msg:
+      - "Installed version: {{ kubesolo_installed_version | default('not installed') }}"
+      - "Target version: {{ kubesolo_version }}"
+      - "Installation needed: {{ kubesolo_needs_install }}"
+
+# Step 1: Stop existing kubesolo processes (if running and needs install)
+- name: Check if kubesolo service exists
+  ansible.builtin.stat:
+    path: "{{ kubesolo_service_paths[kubesolo_init_system] | default('/etc/systemd/system/kubesolo.service') }}"
+  register: kubesolo_service_file
+  when: kubesolo_needs_install | bool
+
+- name: Stop kubesolo service
+  ansible.builtin.include_tasks: "service/stop-{{ kubesolo_init_system }}.yml"
+  when:
+    - kubesolo_needs_install | bool
+    - kubesolo_service_file.stat.exists | default(false)
+
+# Step 2: Kill any remaining kubesolo processes
+- name: Kill kubesolo processes (SIGTERM)
+  ansible.builtin.shell: pkill -15 -x kubesolo || true
+  changed_when: false
+  become: true
+  when: kubesolo_needs_install | bool
+
+- name: Wait for processes to terminate
+  ansible.builtin.pause:
+    seconds: 2
+  when: kubesolo_needs_install | bool
+
+- name: Force kill remaining kubesolo processes (SIGKILL)
+  ansible.builtin.shell: pkill -9 -x kubesolo || true
+  changed_when: false
+  become: true
+  when: kubesolo_needs_install | bool
+
+# Step 3: Clean up file conflicts (only when installing)
+- name: Remove stale PID file
+  ansible.builtin.file:
+    path: "{{ kubesolo_pidfile }}"
+    state: absent
+  become: true
+  when: kubesolo_needs_install | bool
+
+- name: Find and remove stale socket files
+  ansible.builtin.find:
+    paths:
+      - /var/run
+      - /run
+      - "{{ kubesolo_path }}"
+    patterns: '*.sock'
+    file_type: any
+  register: socket_files
+  become: true
+  when: kubesolo_needs_install | bool
+
+- name: Remove stale socket files
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: absent
+  loop: "{{ socket_files.files | default([]) }}"
+  when:
+    - kubesolo_needs_install | bool
+    - socket_files.files | default([]) | length > 0
+  become: true
+
+# Step 4: Download and extract binary (only when needed)
+- name: Create temporary download directory
+  ansible.builtin.tempfile:
+    state: directory
+    suffix: kubesolo
+  register: temp_download_dir
+  when: kubesolo_needs_install | bool
+
+- name: Construct download URL
+  ansible.builtin.set_fact:
+    kubesolo_download_url: >-
+      {{ kubesolo_github_release_url }}/{{ kubesolo_version }}/kubesolo-{{
+      kubesolo_version }}-linux-{{ kubesolo_arch }}{{ kubesolo_libc_suffix }}.tar.gz
+  when: kubesolo_needs_install | bool
+
+- name: Download KubeSolo tarball
+  ansible.builtin.get_url:
+    url: "{{ kubesolo_download_url }}"
+    dest: "{{ temp_download_dir.path }}/kubesolo.tar.gz"
+    mode: '0644'
+  register: download_result
+  when: kubesolo_needs_install | bool
+
+- name: Extract KubeSolo tarball
+  ansible.builtin.unarchive:
+    src: "{{ temp_download_dir.path }}/kubesolo.tar.gz"
+    dest: "{{ temp_download_dir.path }}"
+    remote_src: true
+  register: extract_result
+  when: kubesolo_needs_install | bool
+
+# Step 5: Install binary
+- name: Install KubeSolo binary
+  ansible.builtin.copy:
+    src: "{{ temp_download_dir.path }}/kubesolo"
+    dest: "{{ kubesolo_install_path }}"
+    mode: '0755'
+    remote_src: true
+  become: true
+  when: kubesolo_needs_install | bool
+
+- name: Set SELinux context on binary (if SELinux is enabled)
+  ansible.builtin.command:
+    cmd: restorecon -v {{ kubesolo_install_path }}
+  when:
+    - kubesolo_needs_install | bool
+    - ansible_facts['selinux'] is defined
+    - ansible_facts['selinux']['status'] == 'enabled'
+  changed_when: false
+  failed_when: false
+  become: true
+
+- name: Clean up temporary download directory
+  ansible.builtin.file:
+    path: "{{ temp_download_dir.path }}"
+    state: absent
+  when: kubesolo_needs_install | bool
+
+# Step 6: Create data directory and write version marker
+- name: Ensure kubesolo data directory exists
+  ansible.builtin.file:
+    path: "{{ kubesolo_path }}"
+    state: directory
+    mode: '0755'
+  become: true
+
+- name: Write version marker file
+  ansible.builtin.copy:
+    content: "{{ kubesolo_version }}"
+    dest: "{{ kubesolo_path }}/.version"
+    mode: '0644'
+  become: true
+  when: kubesolo_needs_install | bool
+
+# Step 7: Setup and start service (init-system-specific)
+- name: Setup service for init system
+  ansible.builtin.include_tasks: "service/{{ kubesolo_init_system }}.yml"
+
+# Step 8: Wait for kubeconfig generation
+- name: Wait for kubeconfig file to be generated
+  ansible.builtin.wait_for:
+    path: "{{ kubesolo_kubeconfig_path }}"
+    timeout: 60
+    msg: "Timeout waiting for kubeconfig file at {{ kubesolo_kubeconfig_path }}"
+  become: true
+
+- name: Verify kubeconfig file exists
+  ansible.builtin.stat:
+    path: "{{ kubesolo_kubeconfig_path }}"
+  register: kubeconfig_stat
+  become: true
+
+- name: Display kubeconfig location
+  ansible.builtin.debug:
+    msg: "KubeSolo kubeconfig generated at: {{ kubesolo_kubeconfig_path }}"
+  when: kubeconfig_stat.stat.exists
+
+- name: Display installation success message
+  ansible.builtin.debug:
+    msg:
+      - "KubeSolo {{ kubesolo_version }} has been successfully installed!"
+      - "Binary location: {{ kubesolo_install_path }}"
+      - "Data directory: {{ kubesolo_path }}"
+      - "Kubeconfig: {{ kubesolo_kubeconfig_path }}"
+      - "Service: kubesolo ({{ kubesolo_init_system }})"

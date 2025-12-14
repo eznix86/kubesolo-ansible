@@ -1,0 +1,96 @@
+---
+# KubeSolo Ansible Role - Uninstall/Cleanup Tasks
+# Removes KubeSolo completely from the system
+
+# Stop, disable, and remove service files (init-system-specific)
+- name: Uninstall service for init system
+  ansible.builtin.include_tasks: "uninstall/{{ kubesolo_init_system }}.yml"
+
+# Kill kubesolo processes (using -x for exact match to avoid killing ourselves)
+- name: Kill kubesolo processes (SIGTERM)
+  ansible.builtin.shell: pkill -15 -x kubesolo || true
+  changed_when: false
+  become: true
+
+- name: Wait for graceful shutdown
+  ansible.builtin.pause:
+    seconds: 3
+
+- name: Force kill remaining kubesolo processes (SIGKILL)
+  ansible.builtin.shell: pkill -9 -x kubesolo || true
+  changed_when: false
+  become: true
+
+- name: Wait after SIGKILL
+  ansible.builtin.pause:
+    seconds: 2
+
+- name: Verify no kubesolo processes remain
+  ansible.builtin.shell: pgrep -x kubesolo || true
+  register: remaining_procs
+  changed_when: false
+  become: true
+
+- name: Final force kill if processes remain
+  ansible.builtin.shell: pkill -9 -x kubesolo || true
+  changed_when: false
+  become: true
+  when: remaining_procs.stdout | length > 0
+
+# Find mounts under KubeSolo data directory
+- name: Get mounted filesystems
+  ansible.builtin.setup:
+    gather_subset:
+      - mounts
+  when: kubesolo_remove_data | bool
+
+- name: Find KubeSolo related mounts
+  ansible.builtin.set_fact:
+    kubesolo_mounts: "{{ ansible_facts.mounts | default([]) | selectattr('mount', 'search', kubesolo_path) | map(attribute='mount') | list | sort | reverse | list }}"
+  when: kubesolo_remove_data | bool
+
+- name: Unmount KubeSolo mounts
+  ansible.posix.mount:
+    path: "{{ item }}"
+    state: unmounted
+  loop: "{{ kubesolo_mounts | default([]) }}"
+  when:
+    - kubesolo_remove_data | bool
+    - kubesolo_mounts | default([]) | length > 0
+  become: true
+  failed_when: false
+
+- name: Remove KubeSolo binary
+  ansible.builtin.file:
+    path: "{{ kubesolo_install_path }}"
+    state: absent
+  become: true
+
+- name: Remove kubesolo-ctl binary
+  ansible.builtin.file:
+    path: /usr/local/bin/kubesolo-ctl
+    state: absent
+  become: true
+
+- name: Remove PID file
+  ansible.builtin.file:
+    path: "{{ kubesolo_pidfile }}"
+    state: absent
+  become: true
+
+- name: Remove log file
+  ansible.builtin.file:
+    path: "{{ kubesolo_logfile }}"
+    state: absent
+  become: true
+
+- name: Remove data directory
+  ansible.builtin.file:
+    path: "{{ kubesolo_path }}"
+    state: absent
+  become: true
+  when: kubesolo_remove_data | bool
+
+- name: Display uninstall complete message
+  ansible.builtin.debug:
+    msg: "KubeSolo has been uninstalled successfully."

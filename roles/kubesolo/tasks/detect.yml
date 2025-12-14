@@ -1,0 +1,78 @@
+---
+# KubeSolo Detection Tasks
+# Detects system architecture, libc type, and init system
+# Mirrors detection logic from install.sh
+
+- name: Map architecture to KubeSolo naming
+  ansible.builtin.set_fact:
+    kubesolo_arch: "{{ kubesolo_arch_map[ansible_facts['architecture']] | default('unknown') }}"
+
+- name: Fail if architecture is not supported
+  ansible.builtin.fail:
+    msg: >-
+      Unsupported architecture: {{ ansible_facts['architecture'] }}.
+      Supported: {{ kubesolo_arch_map.keys() | list }}
+  when: kubesolo_arch == 'unknown'
+
+# Libc detection - musl only for Alpine/Void
+- name: Set libc suffix based on distribution
+  ansible.builtin.set_fact:
+    kubesolo_libc_suffix: "{{ '-musl' if ansible_facts['distribution'] in ['Alpine', 'Void'] else '' }}"
+
+# Init system detection - matches install.sh detect_init_system()
+# Priority: systemd > upstart > openrc > s6 > runit > sysvinit
+- name: Set init system based on service_mgr and distribution
+  ansible.builtin.set_fact:
+    kubesolo_init_system: >-
+      {%- if ansible_facts['service_mgr'] == 'systemd' -%}
+      systemd
+      {%- elif ansible_facts['service_mgr'] == 'upstart' -%}
+      upstart
+      {%- elif ansible_facts['service_mgr'] == 'openrc' -%}
+      openrc
+      {%- elif ansible_facts['service_mgr'] == 'runit' -%}
+      runit
+      {%- elif ansible_facts['service_mgr'] == 'sysvinit' -%}
+      sysvinit
+      {%- else -%}
+      unknown
+      {%- endif -%}
+
+# s6 detection - Ansible doesn't detect it, check manually
+- name: Check for s6 init system
+  when: kubesolo_init_system == 'unknown'
+  block:
+    - name: Check if s6-svc command exists
+      ansible.builtin.stat:
+        path: /usr/bin/s6-svc
+      register: s6_cmd_check
+
+    - name: Check if s6-svc exists in /usr/local/bin
+      ansible.builtin.stat:
+        path: /usr/local/bin/s6-svc
+      register: s6_local_cmd_check
+
+    - name: Check if /etc/s6 directory exists
+      ansible.builtin.stat:
+        path: /etc/s6
+      register: s6_dir_check
+
+    - name: Set s6 if detected
+      ansible.builtin.set_fact:
+        kubesolo_init_system: s6
+      when: s6_cmd_check.stat.exists or s6_local_cmd_check.stat.exists or s6_dir_check.stat.exists | default(false)
+
+- name: Fail if init system is not supported
+  ansible.builtin.fail:
+    msg: >-
+      Unsupported init system: {{ kubesolo_init_system }}.
+      Supported: systemd, openrc, runit, s6, sysvinit, upstart
+  when: kubesolo_init_system not in ['systemd', 'openrc', 'runit', 's6', 'sysvinit', 'upstart']
+
+- name: Display detected system information
+  ansible.builtin.debug:
+    msg:
+      - "Distribution: {{ ansible_facts['distribution'] }}"
+      - "Architecture: {{ ansible_facts['architecture'] }} -> {{ kubesolo_arch }}"
+      - "Libc: {{ 'musl' if kubesolo_libc_suffix == '-musl' else 'glibc' }}"
+      - "Init system: {{ kubesolo_init_system }}"

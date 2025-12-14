@@ -1,0 +1,84 @@
+---
+# e2e Verify Uninstall Playbook
+# Verifies KubeSolo has been completely removed
+
+- name: Verify KubeSolo Uninstall
+  hosts: kubesolo_nodes
+  become: true
+  tasks:
+    - name: Check kubesolo binary is removed
+      ansible.builtin.stat:
+        path: /usr/local/bin/kubesolo
+      register: kubesolo_binary
+
+    - name: Assert kubesolo binary is removed
+      ansible.builtin.assert:
+        that:
+          - not kubesolo_binary.stat.exists
+        fail_msg: "KubeSolo binary still exists at /usr/local/bin/kubesolo"
+        success_msg: "KubeSolo binary has been removed"
+
+    - name: Check data directory is removed
+      ansible.builtin.stat:
+        path: /var/lib/kubesolo
+      register: data_dir
+
+    - name: Assert data directory is removed
+      ansible.builtin.assert:
+        that:
+          - not data_dir.stat.exists
+        fail_msg: "KubeSolo data directory still exists at /var/lib/kubesolo"
+        success_msg: "KubeSolo data directory has been removed"
+
+    - name: Detect init system
+      ansible.builtin.set_fact:
+        init_system: "{{ ansible_facts['service_mgr'] }}"
+
+    - name: Check systemd service is removed
+      ansible.builtin.stat:
+        path: /etc/systemd/system/kubesolo.service
+      register: systemd_service
+      when: init_system == 'systemd'
+
+    - name: Assert systemd service is removed
+      ansible.builtin.assert:
+        that:
+          - not systemd_service.stat.exists
+        fail_msg: "KubeSolo systemd service file still exists"
+        success_msg: "KubeSolo systemd service has been removed"
+      when: init_system == 'systemd'
+
+    - name: Check openrc init script is removed
+      ansible.builtin.stat:
+        path: /etc/init.d/kubesolo
+      register: openrc_script
+      when: init_system == 'openrc'
+
+    - name: Assert openrc init script is removed
+      ansible.builtin.assert:
+        that:
+          - not openrc_script.stat.exists
+        fail_msg: "KubeSolo openrc init script still exists"
+        success_msg: "KubeSolo openrc init script has been removed"
+      when: init_system == 'openrc'
+
+    - name: Check kubesolo process is not running
+      ansible.builtin.shell: pgrep -x kubesolo || true
+      register: kubesolo_process
+      changed_when: false
+
+    - name: Assert kubesolo process is not running
+      ansible.builtin.assert:
+        that:
+          - kubesolo_process.stdout == ""
+        fail_msg: "KubeSolo process is still running"
+        success_msg: "No KubeSolo process running"
+
+    - name: Verify uninstall summary
+      ansible.builtin.debug:
+        msg:
+          - "KubeSolo uninstall verification complete"
+          - "Binary removed: yes"
+          - "Data directory removed: yes"
+          - "Service removed: yes"
+          - "Process stopped: yes"

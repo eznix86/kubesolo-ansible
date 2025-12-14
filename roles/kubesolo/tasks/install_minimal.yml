@@ -1,0 +1,189 @@
+---
+# KubeSolo Ansible Role - Minimal Installation Tasks
+# Simplified installation for embedded/busybox systems without complex service management
+
+# Step 0: Check if already installed with correct version
+- name: Initialize installation facts
+  ansible.builtin.set_fact:
+    kubesolo_installed_version: ''
+    kubesolo_needs_install: true
+
+- name: Check if kubesolo binary exists
+  ansible.builtin.stat:
+    path: "{{ kubesolo_install_path }}"
+  register: kubesolo_binary_check
+
+- name: Check if version marker file exists
+  ansible.builtin.stat:
+    path: "{{ kubesolo_path }}/.version"
+  register: kubesolo_version_marker
+
+- name: Read installed version from marker file
+  ansible.builtin.slurp:
+    src: "{{ kubesolo_path }}/.version"
+  register: kubesolo_version_file
+  when: kubesolo_version_marker.stat.exists
+  become: true
+
+- name: Parse installed version
+  ansible.builtin.set_fact:
+    kubesolo_installed_version: "{{ (kubesolo_version_file.content | b64decode | trim) if kubesolo_version_marker.stat.exists else '' }}"
+
+- name: Determine if installation is needed
+  ansible.builtin.set_fact:
+    kubesolo_needs_install: "{{ (not kubesolo_binary_check.stat.exists) or (kubesolo_installed_version != kubesolo_version) }}"
+
+- name: Display version information
+  ansible.builtin.debug:
+    msg:
+      - "Installed version: {{ kubesolo_installed_version | default('not installed') }}"
+      - "Target version: {{ kubesolo_version }}"
+      - "Installation needed: {{ kubesolo_needs_install }}"
+
+- name: Create temporary directory for download
+  ansible.builtin.tempfile:
+    state: directory
+    suffix: kubesolo
+  register: kubesolo_temp_dir
+  when: kubesolo_needs_install | bool
+
+- name: Construct download URL
+  ansible.builtin.set_fact:
+    kubesolo_download_url: >-
+      {{ kubesolo_github_release_url }}/{{ kubesolo_version }}/kubesolo-{{
+      kubesolo_version }}-linux-{{ kubesolo_arch }}{{ kubesolo_libc_suffix }}.tar.gz
+  when: kubesolo_needs_install | bool
+
+- name: Display download information
+  ansible.builtin.debug:
+    msg:
+      - "Downloading KubeSolo {{ kubesolo_version }}"
+      - "URL: {{ kubesolo_download_url }}"
+      - "Architecture: {{ kubesolo_arch }}{{ kubesolo_libc_suffix }}"
+  when: kubesolo_needs_install | bool
+
+- name: Download KubeSolo tarball
+  ansible.builtin.get_url:
+    url: "{{ kubesolo_download_url }}"
+    dest: "{{ kubesolo_temp_dir.path }}/kubesolo.tar.gz"
+    mode: '0644'
+    timeout: 300
+  environment:
+    HTTP_PROXY: "{{ kubesolo_proxy | default('') }}"
+    HTTPS_PROXY: "{{ kubesolo_proxy | default('') }}"
+  register: download_result
+  when: kubesolo_needs_install | bool
+
+- name: Extract KubeSolo binary
+  ansible.builtin.unarchive:
+    src: "{{ kubesolo_temp_dir.path }}/kubesolo.tar.gz"
+    dest: "{{ kubesolo_temp_dir.path }}"
+    remote_src: true
+    creates: "{{ kubesolo_temp_dir.path }}/kubesolo"
+  when: kubesolo_needs_install | bool
+
+- name: Install KubeSolo binary
+  ansible.builtin.copy:
+    src: "{{ kubesolo_temp_dir.path }}/kubesolo"
+    dest: "{{ kubesolo_install_path }}"
+    mode: '0755'
+    remote_src: true
+  become: true
+  when: kubesolo_needs_install | bool
+
+- name: Verify binary installation
+  ansible.builtin.stat:
+    path: "{{ kubesolo_install_path }}"
+  register: binary_check
+  when: kubesolo_needs_install | bool
+
+- name: Fail if binary was not installed correctly
+  ansible.builtin.fail:
+    msg: "Failed to install KubeSolo binary at {{ kubesolo_install_path }}"
+  when:
+    - kubesolo_needs_install | bool
+    - not binary_check.stat.exists or not binary_check.stat.executable
+
+# Create required directories
+- name: Create /usr/local/bin directory if it doesn't exist
+  ansible.builtin.file:
+    path: /usr/local/bin
+    state: directory
+    mode: '0755'
+  become: true
+
+- name: Install kubesolo-ctl helper script
+  ansible.builtin.template:
+    src: kubesolo-ctl.j2
+    dest: /usr/local/bin/kubesolo-ctl
+    mode: '0755'
+  become: true
+
+- name: Create kubesolo data directory
+  ansible.builtin.file:
+    path: "{{ kubesolo_path }}"
+    state: directory
+    mode: '0755'
+  become: true
+
+- name: Create log directory
+  ansible.builtin.file:
+    path: "{{ kubesolo_logfile | dirname }}"
+    state: directory
+    mode: '0755'
+  become: true
+
+- name: Create PID directory
+  ansible.builtin.file:
+    path: "{{ kubesolo_pidfile | dirname }}"
+    state: directory
+    mode: '0755'
+  become: true
+
+- name: Write version marker file
+  ansible.builtin.copy:
+    content: "{{ kubesolo_version }}"
+    dest: "{{ kubesolo_path }}/.version"
+    mode: '0644'
+  become: true
+  when: kubesolo_needs_install | bool
+
+- name: Clean up temporary directory
+  ansible.builtin.file:
+    path: "{{ kubesolo_temp_dir.path }}"
+    state: absent
+  when: kubesolo_needs_install | bool
+
+# Setup and start service (init-system-specific)
+- name: Setup minimal service for init system
+  ansible.builtin.include_tasks: "service/minimal-{{ kubesolo_init_system }}.yml"
+
+- name: Wait for KubeSolo to initialize
+  ansible.builtin.wait_for:
+    path: "{{ kubesolo_path }}/pki/admin/admin.kubeconfig"
+    timeout: 120
+  when: service_start is not failed
+
+- name: Display service status
+  ansible.builtin.command: /usr/local/bin/kubesolo-ctl status
+  become: true
+  register: service_status
+  changed_when: false
+  failed_when: false
+
+- name: Show installation summary
+  ansible.builtin.debug:
+    msg:
+      - "KubeSolo {{ kubesolo_version }} installed successfully in minimal mode"
+      - "Binary location: {{ kubesolo_install_path }}"
+      - "Data directory: {{ kubesolo_path }}"
+      - "Control script: /usr/local/bin/kubesolo-ctl"
+      - "Service: kubesolo ({{ kubesolo_init_system }})"
+      - "Service status: {{ 'Running' if service_start is not failed else 'Failed to start - check logs' }}"
+      - ""
+      - "Available commands:"
+      - "  kubesolo-ctl start    - Start KubeSolo"
+      - "  kubesolo-ctl stop     - Stop KubeSolo"
+      - "  kubesolo-ctl status   - Check status"
+      - "  kubesolo-ctl logs     - View logs"
+      - "  kubesolo-ctl kubeconfig - Get kubeconfig"

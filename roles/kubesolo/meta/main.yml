@@ -1,0 +1,42 @@
+---
+galaxy_info:
+  role_name: kubesolo
+  author: Bruno Bernard
+  description: Ansible role for deploying KubeSolo - ultra-lightweight single-node Kubernetes for edge/IoT devices
+  company: ""
+  license: MIT
+  min_ansible_version: "2.10"
+
+  platforms:
+    - name: Ubuntu
+      versions:
+        - focal
+        - jammy
+        - noble
+    - name: Debian
+      versions:
+        - bullseye
+        - bookworm
+    - name: EL  # CentOS/RHEL/Rocky/Alma
+      versions:
+        - "8"
+        - "9"
+    - name: Alpine
+      versions:
+        - all
+    - name: Archlinux
+      versions:
+        - all
+
+  galaxy_tags:
+    - kubernetes
+    - k8s
+    - kubesolo
+    - edge
+    - iot
+    - embedded
+    - portainer
+    - container
+    - single_node
+
+dependencies: []

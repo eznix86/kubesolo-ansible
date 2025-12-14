@@ -1,0 +1,23 @@
+---
+# Minimal sysvinit service setup - for embedded/busybox systems
+
+- name: Create /etc/init.d directory if it doesn't exist
+  ansible.builtin.file:
+    path: /etc/init.d
+    state: directory
+    mode: '0755'
+  become: true
+
+- name: Create minimal init.d script for KubeSolo
+  ansible.builtin.template:
+    src: kubesolo.sysvinit.j2
+    dest: /etc/init.d/kubesolo
+    mode: '0755'
+  become: true
+
+- name: Start KubeSolo service using init.d script
+  ansible.builtin.command: /etc/init.d/kubesolo start
+  become: true
+  changed_when: true
+  register: service_start
+  failed_when: false
