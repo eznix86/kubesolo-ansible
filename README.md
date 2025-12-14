@@ -1,8 +1,6 @@
 # Deploy KubeSolo with Ansible
 
-Author: <https://github.com/eznix86>
-
-Deploy [KubeSolo](https://github.com/portainer/kubesolo) - Portainer's ultra-lightweight single-node Kubernetes distribution for edge and IoT devices.
+Deploy Portainer's ultra-lightweight single-node Kubernetes distribution, [KubeSolo](https://github.com/portainer/kubesolo) for edge and IoT devices.
 
 Easily bring up KubeSolo on machines running:
 
