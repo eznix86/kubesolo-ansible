@@ -6,7 +6,7 @@ name="kubesolo"
 description="KubeSolo - Lightweight Kubernetes Distribution"
 
 command="{{ kubesolo_install_path }}"
-command_args="--path={{ kubesolo_path }}{% if kubesolo_apiserver_extra_sans | length > 0 %} --apiserver-extra-sans={{ kubesolo_apiserver_extra_sans | join(',') }}{% endif %}{% if kubesolo_portainer_edge_id %} --portainer-edge-id={{ kubesolo_portainer_edge_id }}{% endif %}{% if kubesolo_portainer_edge_key %} --portainer-edge-key={{ kubesolo_portainer_edge_key }}{% endif %}{% if kubesolo_portainer_edge_async %} --portainer-edge-async={{ kubesolo_portainer_edge_async }}{% endif %}{% if kubesolo_local_storage %} --local-storage=true{% endif %}{% if kubesolo_debug %} --debug=true{% endif %}{% if kubesolo_pprof_server %} --pprof-server=true{% endif %}"
+command_args="--path={{ kubesolo_path }}{% if kubesolo_apiserver_extra_sans | length > 0 %} --apiserver-extra-sans={{ kubesolo_apiserver_extra_sans | join(',') }}{% endif %}{% if kubesolo_portainer_edge_id %} --portainer-edge-id={{ kubesolo_portainer_edge_id }}{% endif %}{% if kubesolo_portainer_edge_key %} --portainer-edge-key={{ kubesolo_portainer_edge_key }}{% endif %}{% if kubesolo_portainer_edge_async %} --portainer-edge-async{% endif %}{% if kubesolo_local_storage %} --local-storage{% endif %}{% if kubesolo_debug %} --debug{% endif %}{% if kubesolo_pprof_server %} --pprof-server{% endif %}"
 
 command_background=true
 pidfile="{{ kubesolo_pidfile }}"

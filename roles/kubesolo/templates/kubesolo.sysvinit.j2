@@ -29,16 +29,16 @@ CMD_ARGS="$CMD_ARGS --portainer-edge-id={{ kubesolo_portainer_edge_id }}"
 CMD_ARGS="$CMD_ARGS --portainer-edge-key={{ kubesolo_portainer_edge_key }}"
 {% endif %}
 {% if kubesolo_portainer_edge_async %}
-CMD_ARGS="$CMD_ARGS --portainer-edge-async={{ kubesolo_portainer_edge_async }}"
+CMD_ARGS="$CMD_ARGS --portainer-edge-async"
 {% endif %}
 {% if kubesolo_local_storage %}
-CMD_ARGS="$CMD_ARGS --local-storage=true"
+CMD_ARGS="$CMD_ARGS --local-storage"
 {% endif %}
 {% if kubesolo_debug %}
-CMD_ARGS="$CMD_ARGS --debug=true"
+CMD_ARGS="$CMD_ARGS --debug"
 {% endif %}
 {% if kubesolo_pprof_server %}
-CMD_ARGS="$CMD_ARGS --pprof-server=true"
+CMD_ARGS="$CMD_ARGS --pprof-server"
 {% endif %}
 
 {% if kubesolo_proxy %}
