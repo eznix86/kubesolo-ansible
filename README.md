@@ -50,7 +50,7 @@ Alternatively, add to your `requirements.yml`:
 
 ```yaml
 collections:
-  - name: https://github.com/eznix86/kubesolo-ansible.git
+  - source: https://github.com/eznix86/kubesolo-ansible.git
     type: git
     version: main
 ```
@@ -92,6 +92,8 @@ Then create a playbook `site.yml`:
 - name: Deploy KubeSolo
   hosts: kubesolo_nodes
   become: true
+  collections:
+    - eznix86.kubesolo
   roles:
     - kubesolo
 ```
