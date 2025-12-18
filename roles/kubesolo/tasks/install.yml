@@ -106,6 +106,7 @@
   ansible.builtin.tempfile:
     state: directory
     suffix: kubesolo
+    path: "{{ kubesolo_temp_dir }}"
   register: temp_download_dir
   when: kubesolo_needs_install | bool
 

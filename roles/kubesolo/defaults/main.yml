@@ -42,3 +42,6 @@ kubesolo_remove_data: false
 
 # Binary install path
 kubesolo_install_path: "/usr/local/bin/kubesolo"
+
+# Temporary directory for downloads (use /var/tmp to avoid small tmpfs on /tmp)
+kubesolo_temp_dir: "/var/tmp"
